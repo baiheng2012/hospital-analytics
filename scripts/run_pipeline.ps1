@@ -26,12 +26,18 @@ $Steps = @(
     "08_inpatient_episodes.sql",
     "09_kpi_readmission.sql",
     "10_sim_ed_pia.sql",
-    "11_kpi_views.sql"
+    "11_kpi_views.sql",
+    "12_reconciliation.sql"
 )
 
+
 # Copy the sql folder into the container (sqlcmd runs inside it)
-docker exec $Container rm -rf /tmp/sql
+docker exec -u root $Container rm -rf /tmp/sql
 docker cp $SqlDir "${Container}:/tmp/sql"
+
+
+
+
 
 function Invoke-SqlFile($file) {
     # -C trust cert, -b non-zero exit code on SQL error, -f 65001 read file as UTF-8
