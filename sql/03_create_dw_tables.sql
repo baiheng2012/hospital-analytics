@@ -9,6 +9,7 @@ CREATE TABLE dw.dim_encounter_class (
     class_name      NVARCHAR(100) NOT NULL,         -- 展示名称
     class_group     NVARCHAR(50)  NOT NULL          -- 分组:Acute / Ambulatory / Other
 );
+GO
 
 -- 先放一个"未知"行,key 固定为 -1(IDENTITY 列默认不允许手动插入,需要临时打开)
 SET IDENTITY_INSERT dw.dim_encounter_class ON;
@@ -18,19 +19,24 @@ SET IDENTITY_INSERT dw.dim_encounter_class OFF;
 
 -- 从 staging 里取出所有不重复的类型,自动填入
 INSERT INTO dw.dim_encounter_class (class_code, class_name, class_group)
-SELECT DISTINCT
+SELECT
     ENCOUNTERCLASS,
-    UPPER(LEFT(ENCOUNTERCLASS, 1)) + SUBSTRING(ENCOUNTERCLASS, 2, 50),  -- 首字母大写
+    UPPER(LEFT(ENCOUNTERCLASS, 1)) + SUBSTRING(ENCOUNTERCLASS, 2, 50),
     CASE
         WHEN ENCOUNTERCLASS IN ('emergency', 'inpatient') THEN 'Acute'
         WHEN ENCOUNTERCLASS IN ('ambulatory', 'outpatient', 'wellness', 'urgentcare', 'virtual') THEN 'Ambulatory'
         ELSE 'Other'
     END
 FROM stg.encounters
-WHERE ENCOUNTERCLASS IS NOT NULL AND ENCOUNTERCLASS <> '';
+WHERE ENCOUNTERCLASS IS NOT NULL AND ENCOUNTERCLASS <> ''
+GROUP BY ENCOUNTERCLASS
+ORDER BY ENCOUNTERCLASS;      -- 固定顺序,key 每次相同
 GO
 
-SELECT * FROM dw.dim_encounter_class ORDER BY class_key;
+-- 展示名称人工修正(自动首字母大写的结果不好看)
+UPDATE dw.dim_encounter_class SET class_name = 'Skilled Nursing Facility' WHERE class_code = 'snf';
+UPDATE dw.dim_encounter_class SET class_name = 'Urgent Care'              WHERE class_code = 'urgentcare';
+UPDATE dw.dim_encounter_class SET class_name = 'Home Care'                WHERE class_code = 'home';
 GO
 
 
@@ -47,8 +53,9 @@ CREATE TABLE dw.dim_date (
     weekday_num   TINYINT NOT NULL,     -- 1=周一 ... 7=周日
     weekday_name  NVARCHAR(20) NOT NULL,
     is_weekend    BIT NOT NULL,
-    fiscal_year   SMALLINT NOT NULL     -- 安省医院财年:4/1 到次年 3/31
+    fiscal_year   SMALLINT NOT NULL     -- 财年:4/1 到次年 3/31,以结束年份命名
 );
+GO
 
 -- 用递归 CTE 生成 2010-01-01 到 2030-12-31 的每一天
 WITH d AS (
@@ -73,5 +80,6 @@ FROM d
 OPTION (MAXRECURSION 10000);   -- 默认递归上限 100 层,这里要 7670 天,必须调高
 GO
 
+-- 验证:应为 7670 天
 SELECT COUNT(*) AS days, MIN(full_date) AS first_day, MAX(full_date) AS last_day FROM dw.dim_date;
 GO
