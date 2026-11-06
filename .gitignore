@@ -2,3 +2,5 @@ data/*.csv
 .env
 sql/practice/
 sql/test*.sql
+*.pbix.bak
+powerbi/*_backup*.pbix
